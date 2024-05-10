@@ -1,25 +1,30 @@
 package db
 
-import "github.com/guregu/null/v5"
+import (
+	"database/sql"
+	"strings"
+
+	"github.com/guregu/null/v5"
+)
 
 type User struct {
-	FirstName          string
-	LastName           null.String
-	Badge              null.String
-	Pin                null.String
-	FullLegalName      null.String
-	Id                 int
-	LabId              int
-	ContactId          null.Int
-	PrimaryContactId   null.Int
-	SecondaryContactId null.Int
-	ThirdContactId     null.Int
-	TourRoleId         null.Int
-	LabRoleId          null.Int
-	IsActive           bool
+	FirstName          string      `json:"firstName"`
+	LastName           null.String `json:"lastName"`
+	Badge              null.String `json:"badge"`
+	Pin                null.String `json:"pin"`
+	FullLegalName      null.String `json:"fullLegalName"`
+	Id                 int         `json:"id"`
+	LabId              int         `json:"labId"`
+	ContactId          null.Int    `json:"contactId"`
+	PrimaryContactId   null.Int    `json:"primaryContactId"`
+	SecondaryContactId null.Int    `json:"secondaryContactId"`
+	ThirdContactId     null.Int    `json:"thirdContactId"`
+	TourRoleId         null.Int    `json:"tourRoleId"`
+	LabRoleId          null.Int    `json:"labRoleId"`
+	IsActive           bool        `json:"isActive"`
 }
 
-func (e *Env) Users() ([]User, error) {
+func (e *Env) Users(labId int, isActive bool, labRoleId int) ([]User, error) {
 	const query = `
 	SELECT u.UserID,
 		   u.LabID,
@@ -27,7 +32,7 @@ func (e *Env) Users() ([]User, error) {
 		   u.LastName,
 		   u.ContactID,
 		   u.PrimaryContactID,
-		   u.SecondaryContactID,
+		   u.SecondContactID,
 		   u.ThirdContactID,
 		   u.Badge,
 		   u.Pin,
@@ -36,8 +41,11 @@ func (e *Env) Users() ([]User, error) {
 		   u.FullLegalName,
 		   u.LabRoleID
 	FROM [User] u
+	WHERE (u.LabID = @LabId OR @LabId = 0)
+		  AND (u.Active = 1 OR u.Active = @IsActive)
+		  AND (u.LabRoleId = @LabRoleId OR @LabRoleId = 0)
 	`
-	rows, err := e.DB.Query(query)
+	rows, err := e.DB.Query(query, sql.Named("LabId", labId), sql.Named("IsActive", isActive), sql.Named("LabRoleId", labRoleId))
 	if err != nil {
 		return []User{}, err
 	}
@@ -64,6 +72,9 @@ func (e *Env) Users() ([]User, error) {
 			&user.FullLegalName,
 			&user.LabRoleId,
 		)
+		if user.FullLegalName.Valid {
+			user.FullLegalName.String = strings.Trim(user.FullLegalName.String, " ")
+		}
 		if err != nil {
 			return []User{}, err
 		}
