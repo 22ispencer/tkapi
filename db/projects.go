@@ -56,3 +56,33 @@ func (e *Env) GetProjects(labId int, activeOnly bool) ([]Project, error) {
 	}
 	return projects, nil
 }
+
+func (e *Env) GetProjectById(id int) (Project, error) {
+	const query = `
+	SELECT p.ProjectID,
+		   p.LabID,
+		   p.ProjectName,
+		   p.Active,
+		   p.Description,
+		   p.Flagged,
+		   p.ProjectCode
+	FROM [Project] p
+	WHERE p.Projectid = @Id
+	`
+	row := e.DB.QueryRow(query, sql.Named("Id", id))
+
+	var project Project
+	err := row.Scan(
+		&project.Id,
+		&project.LabId,
+		&project.Name,
+		&project.IsActive,
+		&project.Description,
+		&project.IsFlagged,
+		&project.Code,
+	)
+	if err != nil {
+		return Project{}, err
+	}
+	return project, nil
+}

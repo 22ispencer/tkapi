@@ -31,3 +31,7 @@ func GetEnv() (*Env, error) {
 
 	return &Env{DB: db}, nil
 }
+
+func (e *Env) Close() {
+	e.DB.Close()
+}

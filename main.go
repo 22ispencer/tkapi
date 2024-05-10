@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/WSU-Robotics-Lab/tkapi/db"
 	"github.com/go-chi/chi/v5"
@@ -22,12 +27,43 @@ func main() {
 	if err != nil {
 		log.Fatal("Unable to connect to database")
 	}
+	defer env.Close()
 	server := http.Server{
 		Addr:    ":2024",
 		Handler: router(),
 	}
-	log.Printf("Starting server at \"%s\"", server.Addr)
+
+	serverCtx, serverStopCtx := context.WithCancel(context.Background())
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		<-sig
+
+		shutdownCtx, shutdownCtxCancel := context.WithTimeout(serverCtx, 30*time.Second)
+
+		go func() {
+			<-shutdownCtx.Done()
+			if shutdownCtx.Err() == context.DeadlineExceeded {
+				shutdownCtxCancel()
+				log.Fatal("graceful shutdown timed out.. forcing exit.")
+			}
+		}()
+
+		fmt.Print("\r")
+		log.Println("shutting down.. goodbye 👋")
+		err := server.Shutdown(shutdownCtx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		serverStopCtx()
+	}()
+	log.Printf("starting server at \"%s\"", server.Addr)
 	server.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+	<-serverCtx.Done()
 }
 
 func router() http.Handler {
@@ -59,6 +95,21 @@ func router() http.Handler {
 			}
 		}
 	})
+	router.Get(`/project/{id:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
+		projectId, _ := strconv.Atoi(chi.URLParam(r, "id"))
+		project, err := env.GetProjectById(projectId)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+			projectJson, err := json.Marshal(project)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(projectJson)
+			}
+		}
+	})
 	router.Get("/projects", func(w http.ResponseWriter, r *http.Request) {
 		labId, err := strconv.Atoi(r.URL.Query().Get("labId"))
 		if err != nil {
@@ -86,6 +137,21 @@ func router() http.Handler {
 				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
 			} else {
 				w.Write(projectsJson)
+			}
+		}
+	})
+	router.Get(`/user/{id:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
+		userId, _ := strconv.Atoi(chi.URLParam(r, "id"))
+		user, err := env.GetUserById(userId)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			userJson, err := json.Marshal(user)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(userJson)
 			}
 		}
 	})
@@ -122,21 +188,6 @@ func router() http.Handler {
 				w.Write(usersJson)
 			}
 
-		}
-	})
-	router.Get(`/user/{id:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
-		userId, _ := strconv.Atoi(chi.URLParam(r, "id"))
-		user, err := env.GetUserById(userId)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			userJson, err := json.Marshal(user)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
-			} else {
-				w.Write(userJson)
-			}
 		}
 	})
 	return router
