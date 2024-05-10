@@ -24,7 +24,7 @@ type User struct {
 	IsActive           bool        `json:"isActive"`
 }
 
-func (e *Env) GetUsers(labId int, isActive bool, labRoleId int) ([]User, error) {
+func (e *Env) GetUsers(labId int, activeOnly bool, labRoleId int) ([]User, error) {
 	const query = `
 	SELECT u.UserID,
 		   u.LabID,
@@ -45,7 +45,7 @@ func (e *Env) GetUsers(labId int, isActive bool, labRoleId int) ([]User, error) 
 		  AND (u.Active = 1 OR u.Active = @IsActive)
 		  AND (u.LabRoleId = @LabRoleId OR @LabRoleId = 0)
 	`
-	rows, err := e.DB.Query(query, sql.Named("LabId", labId), sql.Named("IsActive", isActive), sql.Named("LabRoleId", labRoleId))
+	rows, err := e.DB.Query(query, sql.Named("LabId", labId), sql.Named("IsActive", activeOnly), sql.Named("LabRoleId", labRoleId))
 	if err != nil {
 		return []User{}, err
 	}

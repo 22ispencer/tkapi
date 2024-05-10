@@ -33,20 +33,73 @@ func main() {
 func router() http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
-	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello World"))
+	router.Get("/labs", func(w http.ResponseWriter, r *http.Request) {
+		labs, err := env.GetLabs()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		}
+
+		if r.Header.Get("Accept") == "text/html" {
+			w.Header().Add("Content-Type", "text/html")
+			labsHtml := `{{range .}}<option value="{{.Id}}">{{.Name}}</option>{{end}}`
+			tmpl := template.New("labs")
+			tmpl.Parse(labsHtml)
+
+			err := tmpl.Execute(w, labs)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error unable to format HTML: %s", err), http.StatusInternalServerError)
+			}
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+			labsJson, err := json.Marshal(labs)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(labsJson)
+			}
+		}
+	})
+	router.Get("/projects", func(w http.ResponseWriter, r *http.Request) {
+		labId, err := strconv.Atoi(r.URL.Query().Get("labId"))
+		if err != nil {
+			labId = 0
+		}
+		activeOnly := strings.ToLower(r.URL.Query().Get("activeOnly")) == "true"
+
+		projects, err := env.GetProjects(labId, activeOnly)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		} else if r.Header.Get("Accept") == "text/html" {
+			w.Header().Add("Content-Type", "text/html")
+			projectsHtml := `{{range .}}<option value="{{.Id}}">{{.Name}}</option>{{end}}`
+			tmpl := template.New("projects")
+			tmpl.Parse(projectsHtml)
+
+			err = tmpl.Execute(w, projects)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error unable to format HTML: %s", err), http.StatusInternalServerError)
+			}
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+			projectsJson, err := json.Marshal(projects)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(projectsJson)
+			}
+		}
 	})
 	router.Get("/users", func(w http.ResponseWriter, r *http.Request) {
 		labId, err := strconv.Atoi(r.URL.Query().Get("labId"))
 		if err != nil {
 			labId = 0
 		}
-		isActive := strings.ToLower(r.URL.Query().Get("isActive")) == "true"
+		activeOnly := strings.ToLower(r.URL.Query().Get("activeOnly")) == "true"
 		labRoleId, err := strconv.Atoi(r.URL.Query().Get("labRoleId"))
 		if err != nil {
 			labRoleId = 0
 		}
-		users, err := env.GetUsers(labId, isActive, labRoleId)
+		users, err := env.GetUsers(labId, activeOnly, labRoleId)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
 		}
@@ -83,32 +136,6 @@ func router() http.Handler {
 				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
 			} else {
 				w.Write(userJson)
-			}
-		}
-	})
-	router.Get("/labs", func(w http.ResponseWriter, r *http.Request) {
-		labs, err := env.GetLabs()
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
-		}
-
-		if r.Header.Get("Accept") == "text/html" {
-			w.Header().Add("Content-Type", "text/html")
-			labsHtml := `{{range .}}<option value="{{.Id}}">{{.Name}}</option>{{end}}`
-			tmpl := template.New("labs")
-			tmpl.Parse(labsHtml)
-
-			err := tmpl.Execute(w, labs)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Error unable to format HTML: %s", err), http.StatusInternalServerError)
-			}
-		} else {
-			w.Header().Add("Content-Type", "application/json")
-			labsJson, err := json.Marshal(labs)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
-			} else {
-				w.Write(labsJson)
 			}
 		}
 	})
