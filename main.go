@@ -46,14 +46,13 @@ func router() http.Handler {
 		if err != nil {
 			labRoleId = 0
 		}
-		users, err := env.Users(labId, isActive, labRoleId)
+		users, err := env.GetUsers(labId, isActive, labRoleId)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
 		}
 		if r.Header.Get("Accept") == "text/html" {
 			w.Header().Add("Content-Type", "text/html")
 			usersHtml := `{{range .}}<option value="{{.Id}}">{{.FirstName}} {{if .LastName.Valid}}{{.LastName.String}}{{end}}</option>{{end}}`
-
 			tmpl := template.New("users")
 			tmpl.Parse(usersHtml)
 
@@ -66,12 +65,52 @@ func router() http.Handler {
 			usersJson, err := json.Marshal(users)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(usersJson)
 			}
-			w.Write(usersJson)
 
 		}
 	})
-	router.Get("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
+	router.Get(`/user/{id:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
+		userId, _ := strconv.Atoi(chi.URLParam(r, "id"))
+		user, err := env.GetUserById(userId)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			userJson, err := json.Marshal(user)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(userJson)
+			}
+		}
+	})
+	router.Get("/labs", func(w http.ResponseWriter, r *http.Request) {
+		labs, err := env.GetLabs()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		}
+
+		if r.Header.Get("Accept") == "text/html" {
+			w.Header().Add("Content-Type", "text/html")
+			labsHtml := `{{range .}}<option value="{{.Id}}">{{.Name}}</option>{{end}}`
+			tmpl := template.New("labs")
+			tmpl.Parse(labsHtml)
+
+			err := tmpl.Execute(w, labs)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error unable to format HTML: %s", err), http.StatusInternalServerError)
+			}
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+			labsJson, err := json.Marshal(labs)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(labsJson)
+			}
+		}
 	})
 	return router
 }

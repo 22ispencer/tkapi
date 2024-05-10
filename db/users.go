@@ -24,7 +24,7 @@ type User struct {
 	IsActive           bool        `json:"isActive"`
 }
 
-func (e *Env) Users(labId int, isActive bool, labRoleId int) ([]User, error) {
+func (e *Env) GetUsers(labId int, isActive bool, labRoleId int) ([]User, error) {
 	const query = `
 	SELECT u.UserID,
 		   u.LabID,
@@ -81,4 +81,51 @@ func (e *Env) Users(labId int, isActive bool, labRoleId int) ([]User, error) {
 		users = append(users, user)
 	}
 	return users, nil
+}
+
+func (e *Env) GetUserById(userId int) (User, error) {
+	const query = `
+	SELECT u.UserID,
+		   u.LabID,
+		   u.FirstName,
+		   u.LastName,
+		   u.ContactID,
+		   u.PrimaryContactID,
+		   u.SecondContactID,
+		   u.ThirdContactID,
+		   u.Badge,
+		   u.Pin,
+		   u.Active,
+		   u.TourRoleID,
+		   u.FullLegalName,
+		   u.LabRoleID
+	FROM [User] u
+	WHERE u.UserID = @UserId
+	`
+	row := e.DB.QueryRow(query, sql.Named("UserId", userId))
+
+	var user User
+	err := row.Scan(
+		&user.Id,
+		&user.LabId,
+		&user.FirstName,
+		&user.LastName,
+		&user.ContactId,
+		&user.PrimaryContactId,
+		&user.SecondaryContactId,
+		&user.ThirdContactId,
+		&user.Badge,
+		&user.Pin,
+		&user.IsActive,
+		&user.TourRoleId,
+		&user.FullLegalName,
+		&user.LabRoleId,
+	)
+	if err != nil {
+		return User{}, err
+	}
+	if user.FullLegalName.Valid {
+		user.FullLegalName.String = strings.Trim(user.FullLegalName.String, " ")
+	}
+	return user, nil
 }
