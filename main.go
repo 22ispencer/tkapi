@@ -140,6 +140,47 @@ func router() http.Handler {
 			}
 		}
 	})
+	router.Get(`/task/{id:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(chi.URLParam(r, "id"))
+		project, err := env.GetTaskById(id)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+			projectJson, err := json.Marshal(project)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(projectJson)
+			}
+		}
+	})
+	router.Get(`/tasks/{projectId:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
+		projectId, _ := strconv.Atoi(chi.URLParam(r, "projectId"))
+		activeOnly := strings.ToLower(r.URL.Query().Get("activeOnly")) == "true"
+		projects, err := env.GetTasks(projectId, activeOnly)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error running procedure: %s", err), http.StatusInternalServerError)
+		} else if r.Header.Get("Accept") == "text/html" {
+			w.Header().Add("Content-Type", "text/html")
+			tasksHtml := `{{range .}}<option value="{{.Id}}">{{.Name}}</option>{{end}}`
+			tmpl := template.New("tasks")
+			tmpl.Parse(tasksHtml)
+
+			err := tmpl.Execute(w, projects)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error unable to format HTML: %s", err), http.StatusInternalServerError)
+			}
+		} else {
+			w.Header().Add("Content-Type", "application/json")
+			tasksJson, err := json.Marshal(projects)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error converting to JSON: %s", err), http.StatusInternalServerError)
+			} else {
+				w.Write(tasksJson)
+			}
+		}
+	})
 	router.Get(`/user/{id:^\d+$}`, func(w http.ResponseWriter, r *http.Request) {
 		userId, _ := strconv.Atoi(chi.URLParam(r, "id"))
 		user, err := env.GetUserById(userId)
